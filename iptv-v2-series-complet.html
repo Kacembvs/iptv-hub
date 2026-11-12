@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>IPTV</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="IPTV">
+<style>
+:root{--bg:#0e1014;--cd:#1a1d25;--tx:#f1f2f5;--mu:#98a0ad;--ac:#e5484d;--bd:#2a2e39}
+@media (prefers-color-scheme:light){:root{--bg:#f3f4f7;--cd:#fff;--tx:#14161b;--mu:#667;--bd:#dde0e8}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px system-ui,sans-serif;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+input,select,button{font:inherit;border-radius:10px;border:1px solid var(--bd);padding:11px;background:var(--cd);color:var(--tx);width:100%;margin-top:8px}
+button{background:var(--ac);border:0;color:#fff;font-weight:600}
+button.s{background:var(--bd);color:var(--tx)}
+#setup{padding:16px;max-width:520px;margin:auto}
+.box{background:var(--cd);border:1px solid var(--bd);border-radius:14px;padding:14px;margin-top:14px}
+h1{font-size:22px;margin:8px 0}h2{font-size:15px;margin:0}h3{margin:14px 0 4px;font-size:15px}
+#msg{color:var(--ac);font-size:14px;margin-top:10px;white-space:pre-wrap}
+#pl{position:sticky;top:0;z-index:5;background:#000}
+#v{width:100%;max-height:45vh;background:#000;display:block}
+#pt{padding:6px 12px;font-size:13px;color:#ddd;display:flex;gap:8px}
+#pt span{flex:1}#pt b{cursor:pointer;padding:0 8px}
+#pt a{color:#fff;background:#e5484d;border-radius:8px;padding:4px 12px;text-decoration:none;font-weight:600;font-size:13px}
+#app{padding:0 10px 30px}
+.bar{display:flex;gap:6px;margin-top:10px}.bar button{margin:0;padding:9px 4px;background:var(--cd);color:var(--mu);border:1px solid var(--bd)}
+.bar button.on{background:var(--ac);color:#fff;border-color:var(--ac)}
+.row{display:flex;gap:6px}.row>*{flex:1}.row>button{flex:0 0 52px}
+#cnt{color:var(--mu);font-size:12px;margin:8px 2px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:10px}
+.c{cursor:pointer}.c .i{background:var(--cd);border-radius:10px;overflow:hidden;aspect-ratio:2/3;border:1px solid var(--bd)}
+.c.live .i{aspect-ratio:1/1}.c.live img{object-fit:contain;padding:10px}
+.c img{width:100%;height:100%;object-fit:cover;display:block}
+.c p{margin:5px 2px 0;font-size:12px;line-height:1.25;max-height:2.5em;overflow:hidden}
+.ep{padding:12px;background:var(--cd);border:1px solid var(--bd);border-radius:10px;margin-top:6px;cursor:pointer}
+.more{margin-top:14px}
+
+  /* ---------- V2 : fiche serie ---------- */
+  .series-view{max-width:980px;margin:0 auto;padding-bottom:24px}
+  .series-back{width:auto;margin:4px 0 14px;padding:9px 14px}
+  .series-hero{display:grid;grid-template-columns:minmax(130px,220px) 1fr;gap:18px;align-items:start;background:var(--cd);border:1px solid var(--bd);border-radius:16px;padding:14px}
+  .series-poster{width:100%;aspect-ratio:2/3;object-fit:cover;border-radius:12px;background:var(--bd)}
+  .series-info h2{font-size:24px;margin:0 0 7px}
+  .series-meta{color:var(--mu);font-size:13px;line-height:1.6;margin-bottom:8px}
+  .series-plot{line-height:1.55;margin:8px 0;white-space:pre-line}
+  .series-cast{font-size:13px;color:var(--mu);margin-top:9px}
+  .series-tools{display:grid;grid-template-columns:minmax(150px,230px) 1fr;gap:8px;margin:14px 0 8px}
+  .series-tools select,.series-tools input{margin:0}
+  .series-summary{color:var(--mu);font-size:12px;margin:8px 2px}
+  .episode-list{display:grid;gap:8px}
+  .episode-card{display:grid;grid-template-columns:88px 1fr auto;gap:12px;align-items:center;padding:10px;background:var(--cd);border:1px solid var(--bd);border-radius:12px;cursor:pointer}
+  .episode-card:hover{border-color:var(--ac)}
+  .episode-thumb{width:88px;aspect-ratio:16/9;object-fit:cover;border-radius:8px;background:var(--bd)}
+  .episode-title{font-weight:650;font-size:14px}
+  .episode-meta{color:var(--mu);font-size:12px;margin-top:4px}
+  .episode-play{color:#fff;background:var(--ac);border-radius:999px;width:34px;height:34px;display:grid;place-items:center;font-size:14px}
+  .series-empty{padding:24px;text-align:center;color:var(--mu);background:var(--cd);border-radius:12px}
+  @media(max-width:620px){.series-hero{grid-template-columns:105px 1fr;gap:12px}.series-info h2{font-size:20px}.series-plot{grid-column:1/-1}.series-tools{grid-template-columns:1fr}.episode-card{grid-template-columns:76px 1fr auto}.episode-thumb{width:76px}.series-cast{display:none}}
+</style>
+</head>
+<body>
+
+<div id="setup">
+<h1>📺 IPTV</h1>
+<div class="box">
+<h2>Identifiant / mot de passe (Xtream)</h2>
+<input id="xs" placeholder="Serveur : http://exemple.com:8080" inputmode="url" autocapitalize="off">
+<input id="xu" placeholder="Utilisateur" autocapitalize="off">
+<input id="xp" placeholder="Mot de passe" type="password">
+<button onclick="goX()">Se connecter</button>
+</div>
+<div class="box">
+<h2>Lien M3U</h2>
+<input id="mu" placeholder="http://…/get.php?…&type=m3u_plus" inputmode="url" autocapitalize="off">
+<button onclick="goU()">Charger le lien</button>
+</div>
+<div class="box">
+<h2>Fichier M3U</h2>
+<input id="mf" type="file" accept=".m3u,.m3u8,.txt,audio/x-mpegurl,application/vnd.apple.mpegurl,*/*">
+</div>
+<div id="msg"></div>
+</div>
+
+<div id="main" hidden>
+<div id="pl" hidden>
+<video id="v" controls playsinline autoplay></video>
+<div id="pt"><span id="ptt"></span><a id="vlc" href="#">Ouvrir dans VLC</a><b onclick="stop()">✕</b></div>
+</div>
+<div id="app">
+<div class="bar" id="tabs">
+<button data-t="live" class="on">Chaînes</button>
+<button data-t="vod">Films</button>
+<button data-t="ser">Séries</button>
+<button class="s" style="flex:0 0 48px" onclick="logout()">⚙</button>
+</div>
+<div class="row"><select id="cat" onchange="cat=this.value;lim=60;render()"></select></div>
+<input id="q" placeholder="Rechercher…" oninput="lim=60;render()">
+<div id="cnt"></div>
+<div id="grid" class="grid"></div>
+</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.8/hls.min.js"></script>
+<script>
+const $=s=>document.querySelector(s),enc=encodeURIComponent;
+let D={live:[],vod:[],ser:[]},tab='live',cat='',lim=60,X=null,hls=null;
+const msg=t=>$('#msg').textContent=t||'';
+/* si la page est servie par serveur.py, on retente via le relais local (contourne CORS) */
+const F=async u=>{try{return await fetch(u)}catch(e){if(location.protocol==='http:'||location.protocol==='https:')return fetch('/p?u='+encodeURIComponent(u));throw e}};
+const FAIL="Échec de connexion.\nCauses fréquentes : le serveur refuse les requêtes du navigateur (CORS), ou il est en http alors que cette page est en https.\nAstuce : télécharge la playlist .m3u depuis ton fournisseur et charge-la comme fichier.";
+
+/* ---------- Xtream ---------- */
+function normBase(s){s=s.trim().replace(/\/(player_api|get)\.php.*$/,'').replace(/\/+$/,'');return /^https?:/.test(s)?s:'http://'+s}
+const xt=async(a,e='')=>{const r=await F(`${X.base}/player_api.php?username=${enc(X.u)}&password=${enc(X.p)}&action=${a}${e}`);if(!r.ok)throw new Error('HTTP '+r.status);return r.json()};
+const safe=async(a)=>{try{const r=await xt(a);return Array.isArray(r)?r:[]}catch(e){return []}};
+async function goX(save=true){
+  X={base:normBase($('#xs').value),u:$('#xu').value.trim(),p:$('#xp').value};
+  if(!$('#xs').value||!X.u){msg('Renseigne serveur et utilisateur.');return}
+  msg('Connexion…');
+  try{
+    const info=await xt('');
+    if(info&&info.user_info&&info.user_info.auth===0)throw new Error('Identifiants refusés');
+    msg('Chargement du catalogue…');
+    const [lc,ls,vc,vs,sc,ss]=await Promise.all(['get_live_categories','get_live_streams','get_vod_categories','get_vod_streams','get_series_categories','get_series'].map(safe));
+    const m=a=>Object.fromEntries(a.map(c=>[c.category_id,c.category_name]));
+    const L=m(lc),V=m(vc),S=m(sc);
+    D.live=ls.map(o=>({name:o.name,img:o.stream_icon,cat:L[o.category_id]||'Divers',url:`${X.base}/live/${enc(X.u)}/${enc(X.p)}/${o.stream_id}.m3u8`}));
+    D.vod=vs.map(o=>({name:o.name,img:o.stream_icon,cat:V[o.category_id]||'Divers',url:`${X.base}/movie/${enc(X.u)}/${enc(X.p)}/${o.stream_id}.${o.container_extension||'mp4'}`}));
+    D.ser=ss.map(o=>({name:o.name,img:o.cover,cat:S[o.category_id]||'Divers',sid:o.series_id,plot:o.plot||'',genre:o.genre||'',rating:o.rating||'',year:o.releaseDate||o.release_date||'',cast:o.cast||''}));
+    if(save)localStorage.setItem('iptv_cfg',JSON.stringify({k:'x',s:$('#xs').value,u:X.u,p:X.p}));
+    start();
+  }catch(e){msg(FAIL+'\n('+e.message+')')}
+}
+
+/* ---------- M3U ---------- */
+function parseM3U(t){
+  const o={live:[],vod:[],ser:[]};let cur=null;
+  for(const raw of t.split(/\r?\n/)){
+    const l=raw.trim();
+    if(l.startsWith('#EXTINF')){
+      const a=k=>(l.match(new RegExp(k+'="([^"]*)"','i'))||[])[1]||'';
+      cur={name:l.slice(l.lastIndexOf(',')+1).trim()||a('tvg-name')||'Sans nom',img:a('tvg-logo'),cat:a('group-title')||'Divers'};
+    }else if(cur&&/^(https?|rtmp):/i.test(l)){
+      const isV=/\/movie\//.test(l),isS=/\/series\//.test(l);
+      cur.url=(isV||isS)?l:l.replace(/^(https?:\/\/[^/]+)\/(?:live\/)?([^/]+)\/([^/]+)\/(\d+)(?:\.ts)?$/,'$1/live/$2/$3/$4.m3u8');
+      (isV?o.vod:isS?o.ser:o.live).push(cur);cur=null;
+    }
+  }
+  return o;
+}
+function loadText(t){
+  const o=parseM3U(t);
+  if(!o.live.length&&!o.vod.length&&!o.ser.length){msg('Aucune entrée trouvée dans cette playlist.');return}
+  D=o;start();
+}
+async function goU(){
+  const u=$('#mu').value.trim();if(!u)return;
+  msg('Téléchargement…');
+  try{const r=await F(u);if(!r.ok)throw new Error('HTTP '+r.status);loadText(await r.text());localStorage.setItem('iptv_cfg',JSON.stringify({k:'u',u}))}
+  catch(e){msg(FAIL+'\n('+e.message+')')}
+}
+$('#mf').onchange=e=>{
+  const f=e.target.files[0];if(!f)return;msg('Lecture du fichier…');
+  const r=new FileReader();r.onload=()=>loadText(r.result);r.readAsText(f);
+};
+
+/* ---------- UI ---------- */
+function start(){
+  msg('');$('#setup').hidden=true;$('#main').hidden=false;
+  const first=['live','vod','ser'].find(k=>D[k].length)||'live';
+  setTab(first);
+}
+function logout(){stop();localStorage.removeItem('iptv_cfg');$('#main').hidden=true;$('#setup').hidden=false}
+$('#tabs').onclick=e=>{const t=e.target.dataset&&e.target.dataset.t;if(t)setTab(t)};
+function setTab(t){
+  tab=t;cat='';lim=60;$('#q').value='';
+  document.querySelectorAll('#tabs [data-t]').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
+  const cs={};D[t].forEach(i=>cs[i.cat]=(cs[i.cat]||0)+1);
+  const sel=$('#cat');sel.textContent='';
+  sel.add(new Option('Tous les groupes ('+D[t].length+')',''));
+  Object.keys(cs).sort((a,b)=>a.localeCompare(b)).forEach(c=>sel.add(new Option(c+' ('+cs[c]+')',c)));
+  render();
+}
+function render(){
+  const g=$('#grid');g.className='grid';g.textContent='';
+  const q=$('#q').value.toLowerCase();
+  const items=D[tab].filter(i=>(!cat||i.cat===cat)&&(!q||i.name.toLowerCase().includes(q)));
+  $('#cnt').textContent=items.length+' résultat'+(items.length>1?'s':'');
+  items.slice(0,lim).forEach(i=>g.append(card(i)));
+  if(items.length>lim){
+    const b=document.createElement('button');b.className='more s';b.style.gridColumn='1/-1';
+    b.textContent='Afficher plus';b.onclick=()=>{lim+=60;render()};g.append(b);
+  }
+}
+function card(it){
+  const d=document.createElement('div');d.className='c '+tab;
+  const w=document.createElement('div');w.className='i';
+  if(it.img){const im=document.createElement('img');im.loading='lazy';im.referrerPolicy='no-referrer';im.src=it.img;im.onerror=()=>im.remove();w.append(im)}
+  const p=document.createElement('p');p.textContent=it.name;
+  d.append(w,p);d.onclick=()=>it.sid?showSeries(it):play(it.url,it.name);return d;
+}
+async function showSeries(it){
+  const g=$('#grid');g.className='';g.textContent='Chargement de la série…';
+  $('#cat').disabled=true;$('#q').disabled=true;
+  try{
+    const r=await xt('get_series_info','&series_id='+it.sid);
+    const info=r.info||{};
+    const eps=r.episodes||{};
+    const seasons=Object.keys(eps).sort((a,b)=>Number(a)-Number(b));
+    const total=seasons.reduce((n,s)=>n+(Array.isArray(eps[s])?eps[s].length:0),0);
+    g.textContent='';
+    const view=document.createElement('div');view.className='series-view';g.append(view);
+
+    const back=document.createElement('button');back.className='s series-back';back.textContent='← Toutes les séries';
+    back.onclick=()=>{$('#cat').disabled=false;$('#q').disabled=false;render()};view.append(back);
+
+    const hero=document.createElement('section');hero.className='series-hero';
+    const poster=document.createElement('img');poster.className='series-poster';poster.alt='Affiche de '+it.name;
+    poster.referrerPolicy='no-referrer';poster.src=info.cover||info.movie_image||it.img||'';
+    poster.onerror=()=>{poster.removeAttribute('src');poster.alt='Affiche indisponible'};
+    const details=document.createElement('div');details.className='series-info';
+    const title=document.createElement('h2');title.textContent=info.name||it.name;
+    const meta=document.createElement('div');meta.className='series-meta';
+    const bits=[];
+    if(info.genre||it.genre)bits.push(info.genre||it.genre);
+    if(info.releaseDate||info.release_date||it.year)bits.push(String(info.releaseDate||info.release_date||it.year).slice(0,10));
+    if(info.rating||it.rating)bits.push('★ '+(info.rating||it.rating));
+    bits.push(seasons.length+' saison'+(seasons.length>1?'s':''));bits.push(total+' épisode'+(total>1?'s':''));
+    meta.textContent=bits.join('  •  ');
+    const plot=document.createElement('p');plot.className='series-plot';plot.textContent=info.plot||it.plot||'Aucun synopsis disponible.';
+    details.append(title,meta,plot);
+    const cast=info.cast||it.cast;if(cast){const c=document.createElement('div');c.className='series-cast';c.textContent='Avec : '+cast;details.append(c)}
+    hero.append(poster,details);view.append(hero);
+
+    if(!seasons.length){const empty=document.createElement('div');empty.className='series-empty';empty.textContent='Aucun épisode disponible.';view.append(empty);return}
+
+    const tools=document.createElement('div');tools.className='series-tools';
+    const sel=document.createElement('select');sel.setAttribute('aria-label','Choisir une saison');
+    seasons.forEach(s=>sel.add(new Option('Saison '+s,s)));
+    const search=document.createElement('input');search.type='search';search.placeholder='Rechercher un épisode…';search.setAttribute('aria-label','Rechercher un épisode');
+    tools.append(sel,search);view.append(tools);
+    const summary=document.createElement('div');summary.className='series-summary';view.append(summary);
+    const list=document.createElement('div');list.className='episode-list';view.append(list);
+
+    const renderEpisodes=()=>{
+      const season=sel.value,q=search.value.trim().toLowerCase();
+      const all=Array.isArray(eps[season])?eps[season]:[];
+      const shown=all.filter(e=>!q||String(e.title||'').toLowerCase().includes(q)||String(e.episode_num||'').includes(q));
+      summary.textContent=shown.length+' épisode'+(shown.length>1?'s':'')+' affiché'+(shown.length>1?'s':'');list.textContent='';
+      if(!shown.length){const empty=document.createElement('div');empty.className='series-empty';empty.textContent='Aucun épisode ne correspond à la recherche.';list.append(empty);return}
+      shown.forEach(e=>{
+        const row=document.createElement('div');row.className='episode-card';row.tabIndex=0;row.setAttribute('role','button');
+        const thumb=document.createElement('img');thumb.className='episode-thumb';thumb.loading='lazy';thumb.referrerPolicy='no-referrer';thumb.alt='';
+        thumb.src=(e.info&&e.info.movie_image)||e.movie_image||info.backdrop_path?.[0]||info.cover||it.img||'';thumb.onerror=()=>thumb.remove();
+        const text=document.createElement('div');
+        const t=document.createElement('div');t.className='episode-title';t.textContent=(e.episode_num?'Épisode '+e.episode_num+' · ':'')+(e.title||'Épisode');
+        const m=document.createElement('div');m.className='episode-meta';
+        const duration=(e.info&&e.info.duration)||e.duration||'';m.textContent='S'+String(season).padStart(2,'0')+'E'+String(e.episode_num||'').padStart(2,'0')+(duration?'  •  '+duration:'');
+        text.append(t,m);const icon=document.createElement('span');icon.className='episode-play';icon.textContent='▶';row.append(thumb,text,icon);
+        const open=()=>play(`${X.base}/series/${enc(X.u)}/${enc(X.p)}/${e.id}.${e.container_extension||'mp4'}`,it.name+' · '+t.textContent);
+        row.onclick=open;row.onkeydown=ev=>{if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();open()}};list.append(row);
+      });
+    };
+    sel.onchange=renderEpisodes;search.oninput=renderEpisodes;renderEpisodes();
+  }catch(e){
+    $('#cat').disabled=false;$('#q').disabled=false;g.textContent='Erreur : '+e.message;
+    const b=document.createElement('button');b.className='s';b.textContent='← Retour aux séries';b.onclick=render;g.prepend(b);
+  }
+}
+/* ---------- Lecture ---------- */
+function play(url,title){
+  const v=$('#v');$('#pl').hidden=false;$('#ptt').textContent=title;$('#vlc').href='vlc-x-callback://x-callback-url/stream?url='+enc(url);
+  if(hls){hls.destroy();hls=null}
+  const native=v.canPlayType('application/vnd.apple.mpegurl');
+  if(/\.m3u8(\?|$)/i.test(url)&&!native&&window.Hls&&Hls.isSupported()){hls=new Hls();hls.loadSource(url);hls.attachMedia(v)}
+  else v.src=url;
+  v.onerror=()=>$('#ptt').textContent=title+' — lecture impossible ici : appuie sur « Ouvrir dans VLC »';
+  v.play().catch(()=>{});
+  scrollTo({top:0,behavior:'smooth'});
+}
+function stop(){const v=$('#v');v.pause();v.removeAttribute('src');v.load();if(hls){hls.destroy();hls=null}$('#pl').hidden=true}
+
+/* ---------- Reconnexion auto ---------- */
+try{
+  const c=JSON.parse(localStorage.getItem('iptv_cfg')||'null');
+  if(c&&c.k==='x'){$('#xs').value=c.s;$('#xu').value=c.u;$('#xp').value=c.p;goX(false)}
+  else if(c&&c.k==='u'){$('#mu').value=c.u;goU()}
+}catch(e){}
+</script>
+</body>
+</html>

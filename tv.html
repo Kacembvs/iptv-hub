@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IPTV TV</title>
+<style>
+:root{--bg:#0a0c11;--pn:#12151d;--tx:#f4f5f8;--mu:#8b93a1;--ac:#e5484d}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0;background:radial-gradient(circle at 20% 0%,#1a1f2c,#0a0c11 60%);color:var(--tx);font:1.4vw system-ui,sans-serif;overflow:hidden;cursor:none}
+#app{display:grid;grid-template-rows:auto 1fr;height:100%}
+#tabs{display:flex;gap:.5em;padding:.8em 1.2em .4em}
+#tabs .f{padding:.4em 1em;border-radius:2em;color:var(--mu);font-weight:600}
+#tabs .f.cur{color:#fff;background:#232836}
+#cols{display:grid;grid-template-columns:20% 38% 1fr;gap:1em;padding:.4em 1.2em 1.2em;min-height:0}
+.col{overflow-y:auto;min-height:0;background:var(--pn);border-radius:.8em;padding:.5em;scroll-behavior:smooth}
+.col::-webkit-scrollbar{display:none}
+.f{padding:.5em .8em;border-radius:.6em;color:#cfd3db;white-space:nowrap}
+.col .f{display:flex;align-items:center;gap:.7em;margin-bottom:.2em;overflow:hidden}
+.col .f.cur{background:#1d2230;color:#fff;box-shadow:inset .2em 0 var(--ac)}
+.f.on{background:var(--ac)!important;color:#fff!important;box-shadow:none!important}
+#items img{width:2.8em;height:2.8em;object-fit:contain;flex:none;background:#0006;border-radius:.4em}
+#items .n{color:var(--mu);min-width:2.2em;text-align:right;font-size:.8em}
+.f.on .n{color:#fff}
+.col span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#right{display:flex;flex-direction:column;gap:.6em;min-height:0}
+#vw{background:#000;border-radius:.8em;aspect-ratio:16/9;width:100%;overflow:hidden}
+video{width:100%;height:100%;background:#000}
+#info{font-size:1.1em;font-weight:600;max-height:5em;overflow:hidden}
+#info small{display:block;color:var(--mu);font-weight:400;font-size:.75em;margin-top:.3em}
+#act{display:flex;gap:.6em}
+#act .f{background:#232836;padding:.6em 1.1em}
+body.fs #app{display:block}body.fs #tabs,body.fs .col,body.fs #info,body.fs #act{display:none}
+body.fs #cols{display:block;padding:0}body.fs #right{position:fixed;inset:0}
+body.fs #vw{position:fixed;inset:0;aspect-ratio:auto;border-radius:0;height:100%}
+#toast{position:fixed;left:50%;bottom:7%;transform:translateX(-50%);background:#000d;padding:.5em 1.2em;border-radius:.6em;display:none;max-width:80%;white-space:pre-wrap;text-align:center;z-index:8}
+#status{position:fixed;inset:0;display:none;align-items:center;justify-content:center;text-align:center;white-space:pre-wrap;padding:2em;background:#0a0c11ee;font-size:1.3em;line-height:1.5;z-index:9}
+#ver{position:fixed;top:.5em;right:1.2em;color:#5d6575;font-size:.7em;z-index:7}
+#cfg{padding:3em;line-height:1.6}
+#cfg input,#cfg button{display:block;width:60%;font:inherit;padding:.5em;margin:.5em 0;border-radius:.4em;border:2px solid #444;background:#161a22;color:#fff}
+#cfg button{background:var(--ac);border:0}
+</style>
+</head>
+<body>
+<div id="app" >
+<div id="tabs"></div>
+<div id="cols">
+<div class="col" id="cats"></div>
+<div class="col" id="items"></div>
+<div id="right"><div id="vw"><video id="v" autoplay playsinline></video></div><div id="info"></div><div id="act"></div></div>
+</div>
+</div>
+<div id="cfg" hidden><h1>Compte IPTV</h1><input id="cs" placeholder="Serveur : http://exemple.com:8080"><input id="cu" placeholder="Utilisateur"><input id="cp" placeholder="Mot de passe"><button id="cb">Enregistrer</button><div id="cm"></div></div>
+<div id="toast"></div>
+<div id="status"></div>
+<div id="ver">v2</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.8/hls.min.js"></script>
+<script>
+const $=s=>document.querySelector(s),enc=encodeURIComponent,FILE=location.protocol==='file:',px=u=>FILE?u:'/p?u='+enc(u),api=u=>(FILE?'https://app.local':'')+'/p?u='+enc(u);
+const FK='tv_favs',favs=new Set(JSON.parse(localStorage.getItem(FK)||'[]'));
+const TABS=[['live','Chaînes'],['vod','Films'],['ser','Séries'],['fav','♥ Favoris'],['cfg','⚙ Compte']];
+let C,D={live:[],vod:[],ser:[]},tab='live',cats=[],list=[],base=[],epi=false,hls=null,fs=false,cur=null,sel=null,P=1,catIdx=-1;
+const I=[0,0,0,0],loading={vod:false,ser:false};
+let CFG0=null,statusErr=false;
+const key=it=>it.t+'|'+(it.sid||it.url);
+function toast(t,ms=2500){const e=$('#toast');e.textContent=t;e.style.display='block';clearTimeout(toast.h);toast.h=setTimeout(()=>e.style.display='none',ms)}
+const els=p=>[...$(['#tabs','#cats','#items','#act'][p]).children];
+const j=async a=>{
+  const r=await fetch(api(`${C.base}/player_api.php?username=${enc(C.u)}&password=${enc(C.p)}&action=${a}`));
+  if(!r.ok)throw new Error('HTTP '+r.status);
+  const t=await r.text();
+  try{return JSON.parse(t)}catch(e){throw new Error('réponse non JSON : '+t.slice(0,60).replace(/\s+/g,' '))}
+};
+function status(t,err){statusErr=!!err;const e=$('#status');e.textContent=t||'';e.style.display=t?'flex':'none'}
+function setInfo(it){const e=$('#info');e.textContent=it?it.name:'';if(it&&it.plot){const s=document.createElement('small');s.textContent=it.plot;e.append(s)}}
+
+function focus(){
+  document.querySelectorAll('.on').forEach(e=>e.classList.remove('on'));
+  const L=els(P);if(!L.length)return;
+  I[P]=Math.max(0,Math.min(I[P],L.length-1));
+  const e=L[I[P]];e.classList.add('on');e.scrollIntoView({block:'nearest'});
+  if(P===2){sel=list[I[2]]||null;setInfo(sel)}
+  updAct();
+}
+function updAct(){const a=els(3),it=sel||cur;if(a[1])a[1].textContent=it&&favs.has(key(it))?'♥ Retirer des favoris':'♡ Ajouter aux favoris'}
+function mk(txt){const d=document.createElement('div');d.className='f';d.textContent=txt;return d}
+function renderTabs(){const t=$('#tabs');t.textContent='';TABS.forEach(([k,n])=>{const d=mk(n);if(k===tab)d.classList.add('cur');t.append(d)})}
+function setTab(k){
+  tab=k;epi=false;I[1]=0;I[2]=0;catIdx=-1;renderTabs();
+  const c=$('#cats');c.textContent='';
+  if(k==='cfg'){cats=[];base=list=[];const it=$('#items');it.textContent='';it.append(mk('Appuie sur OK pour changer de compte'));return}
+  if(k==='fav'){cats=[];base=[...D.live,...D.vod,...D.ser].filter(i=>favs.has(key(i)));list=base;renderItems();return}
+  const m={};D[k].forEach(i=>m[i.cat]=(m[i.cat]||0)+1);
+  cats=Object.keys(m).sort((a,b)=>a.localeCompare(b));
+  cats.forEach(n=>c.append(mk(n+' ('+m[n]+')')));
+  selectCat(0);
+}
+function selectCat(i){
+  if(i===catIdx)return;catIdx=i;
+  base=D[tab].filter(x=>x.cat===cats[i]);list=base;epi=false;renderItems();
+  [...$('#cats').children].forEach((e,k)=>e.classList.toggle('cur',k===i));
+}
+function renderItems(){
+  const c=$('#items');c.textContent='';
+  if(!list.length){c.append(mk(tab==='fav'?'Aucun favori : choisis un contenu puis « Ajouter aux favoris ».':(loading[tab]?'Chargement en cours…':'Vide')));return}
+  list.slice(0,400).forEach((it,i)=>{
+    const d=document.createElement('div');d.className='f';
+    if(tab==='live'){const n=document.createElement('b');n.className='n';n.textContent=i+1;d.append(n)}
+    if(it.img){const im=document.createElement('img');im.loading='lazy';im.referrerPolicy='no-referrer';im.src=it.img;im.onerror=()=>im.remove();d.append(im)}
+    const s=document.createElement('span');s.textContent=it.name;d.append(s);c.append(d);
+  });
+}
+function play(it){
+  cur=it;sel=it;const v=$('#v');
+  if(hls){hls.destroy();hls=null}
+  setInfo(it);
+  if(/\.m3u8(\?|$)/i.test(it.url)){
+    if(window.Hls&&Hls.isSupported()){
+      hls=new Hls();hls.loadSource(px(it.url));hls.attachMedia(v);
+      hls.on(Hls.Events.ERROR,(e,d)=>{if(d.fatal)toast('Flux indisponible ('+d.details+')')});
+    }else v.src=px(it.url);
+  }else v.src=it.url;
+  v.onerror=()=>toast('Lecture impossible (format non géré ou flux coupé)');
+  v.play().catch(()=>{});
+  updAct();
+}
+async function openSeries(it){
+  toast('Chargement des épisodes…');
+  try{
+    const r=await j('get_series_info&series_id='+it.sid),ep=[];
+    Object.keys(r.episodes||{}).sort((a,b)=>a-b).forEach(s=>r.episodes[s].forEach(e=>ep.push({t:'ser',name:`S${s} · E${e.episode_num||''} · ${e.title||'Épisode'}`,img:it.img,url:`${C.base}/series/${enc(C.u)}/${enc(C.p)}/${e.id}.${e.container_extension||'mp4'}`})));
+    if(!ep.length){toast('Aucun épisode');return}
+    epi=true;list=ep;I[2]=0;renderItems();focus();
+  }catch(e){toast('Erreur : '+e.message)}
+}
+function toggleFs(on){fs=on;document.body.classList.toggle('fs',on);if(on&&!cur&&sel)play(sel)}
+function zap(d){if(!list.length)return;let i=list.indexOf(cur);i=(i+d+list.length)%list.length;I[2]=i;play(list[i]);toast(list[i].name)}
+function togFav(){
+  const it=sel||cur;if(!it)return;
+  favs.has(key(it))?favs.delete(key(it)):favs.add(key(it));
+  try{localStorage.setItem(FK,JSON.stringify([...favs]))}catch(e){}
+  toast(favs.has(key(it))?'Ajouté aux favoris ♥':'Retiré des favoris');
+  if(tab==='fav'){const k=I[2];setTab('fav');I[2]=k;P=2}
+  focus();
+}
+window.__back=()=>{if($('#status').style.display==='flex')return false;const h=fs||epi||P>0;back();return h};
+function back(){
+  if(fs){toggleFs(false);return}
+  if(epi){epi=false;list=base;renderItems();P=2}
+  else if(P>0)P=(P===2&&tab==='fav')?0:P-1;
+  focus();
+}
+document.addEventListener('keydown',e=>{
+  if(!$('#cfg').hidden)return;
+  if($('#status').style.display==='flex'){if(statusErr){if(e.key==='Enter')start();else if(e.key==='ArrowLeft')showForm();e.preventDefault()}return}
+  const k=e.key;let h=true;
+  const isBack=k==='Escape'||k==='Backspace'||k==='GoBack'||e.keyCode===4;
+  if(fs){
+    if(k==='ArrowUp')zap(-1);else if(k==='ArrowDown')zap(1);
+    else if(isBack)toggleFs(false);else if(k==='Enter')toast(cur?cur.name:'');else h=false;
+    if(h)e.preventDefault();return;
+  }
+  if(k==='ArrowDown'){if(P===0){if(tab==='fav')P=2;else if(tab!=='cfg')P=1}else if(P!==3)I[P]++}
+  else if(k==='ArrowUp'){if(P===3)P=2;else if(I[P]>0)I[P]--;else if(P>0)P=0}
+  else if(k==='ArrowRight'){
+    if(P===0){I[0]=Math.min(I[0]+1,TABS.length-1);setTab(TABS[I[0]][0])}
+    else if(P===1)P=2;else if(P===2)P=3;else if(P===3&&I[3]<1)I[3]++;
+  }else if(k==='ArrowLeft'){
+    if(P===0){I[0]=Math.max(I[0]-1,0);setTab(TABS[I[0]][0])}
+    else if(P===1)P=0;else if(P===2)P=tab==='fav'?0:1;else if(P===3){if(I[3]>0)I[3]--;else P=2}
+  }else if(k==='Enter'){
+    if(P===1){selectCat(I[1]);P=2;I[2]=0}
+    else if(P===2){const it=list[I[2]];if(it){it.sid&&!epi?openSeries(it):play(it)}}
+    else if(P===3){I[3]===0?toggleFs(true):togFav()}
+    else if(P===0){if(tab==='cfg')showForm();else if(tab!=='fav')P=1}
+  }else if(isBack){back();e.preventDefault();return}
+  else h=false;
+  if(h){e.preventDefault();focus();if(P===1)selectCat(I[1])}
+});
+history.pushState({},'');
+addEventListener('popstate',()=>{history.pushState({},'');back()});
+
+function showForm(){$('#app').hidden=true;$('#cfg').hidden=false;$('#cs').focus()}
+$('#cb').onclick=()=>{
+  const c={server:$('#cs').value.trim(),user:$('#cu').value.trim(),pass:$('#cp').value};
+  if(!c.server||!c.user){$('#cm').textContent='Renseigne le serveur et l\u2019utilisateur.';return}
+  try{localStorage.setItem('tv_cfg',JSON.stringify(c))}catch(e){}
+  location.reload();
+};
+async function viaM3U(){
+  try{
+    const r=await fetch(api(`${C.base}/get.php?username=${enc(C.u)}&password=${enc(C.p)}&type=m3u_plus&output=hls`));
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const t=await r.text();
+    if(t.indexOf('#EXTINF')<0)throw new Error('playlist vide');
+    const o={live:[],vod:[],ser:[]};let cur=null;
+    for(const raw of t.split(/\r?\n/)){
+      const l=raw.trim();
+      if(l.startsWith('#EXTINF')){
+        const a=k=>(l.match(new RegExp(k+'="([^"]*)"','i'))||[])[1]||'';
+        cur={name:l.slice(l.lastIndexOf(',')+1).trim()||a('tvg-name')||'Sans nom',img:a('tvg-logo'),cat:a('group-title')||'Divers'};
+      }else if(cur&&/^https?:/i.test(l)){
+        const v=/\/movie\//.test(l),s=/\/series\//.test(l);
+        cur.url=(v||s)?l:l.replace(/^(https?:\/\/[^/]+)\/(?:live\/)?([^/]+)\/([^/]+)\/(\d+)(?:\.ts)?$/,'$1/live/$2/$3/$4.m3u8');
+        cur.t=v?'vod':s?'ser':'live';(v?o.vod:s?o.ser:o.live).push(cur);cur=null;
+      }
+    }
+    if(!o.live.length&&!o.vod.length&&!o.ser.length)throw new Error('aucune entrée');
+    D=o;status('');setTab(o.live.length?'live':o.vod.length?'vod':'ser');P=1;focus();return true;
+  }catch(e){return false}
+}
+async function loadMore(){
+  const m=x=>Object.fromEntries(x.map(c=>[c.category_id,c.category_name]));
+  const arr=async a=>{const r=await j(a);return Array.isArray(r)?r:[]};
+  loading.vod=loading.ser=true;
+  try{
+    const [vc,vs]=await Promise.all([arr('get_vod_categories'),arr('get_vod_streams')]);const V=m(vc);
+    D.vod=vs.map(o=>({t:'vod',name:o.name,img:o.stream_icon,cat:V[o.category_id]||'Divers',url:`${C.base}/movie/${enc(C.u)}/${enc(C.p)}/${o.stream_id}.${o.container_extension||'mp4'}`}));
+  }catch(e){toast('Films : '+e.message,6000)}
+  loading.vod=false;if(tab==='vod'){const p=P;setTab('vod');P=p;focus()}
+  try{
+    const [sc,ss]=await Promise.all([arr('get_series_categories'),arr('get_series')]);const S=m(sc);
+    D.ser=ss.map(o=>({t:'ser',name:o.name,img:o.cover,cat:S[o.category_id]||'Divers',sid:o.series_id,plot:o.plot||''}));
+  }catch(e){toast('Séries : '+e.message,6000)}
+  loading.ser=false;if(tab==='ser'){const p=P;setTab('ser');P=p;focus()}
+}
+async function start(){
+  const b=CFG0.server.trim().replace(/\/(player_api|get)\.php.*$/,'').replace(/\/+$/,'');
+  C={base:/^https?:/.test(b)?b:'http://'+b,u:CFG0.user.trim(),p:CFG0.pass};
+  D={live:[],vod:[],ser:[]};
+  const fail=m=>status(m+'\n\nOK : réessayer   ·   Gauche : changer de compte',true);
+  status('Connexion à '+C.base+' …');
+  let info;
+  try{info=await j('')}catch(e){
+    status('API injoignable ('+e.message+').\nEssai de la playlist M3U…');
+    if(await viaM3U())return;
+    fail('Échec de connexion : '+e.message);return;
+  }
+  const ui=info&&info.user_info;
+  if(!ui){if(await viaM3U())return;fail('Réponse inattendue du serveur (pas de user_info).');return}
+  if(Number(ui.auth)===0){fail('Identifiants refusés par le serveur.');return}
+  status('Chargement des chaînes…');
+  try{
+    const lc=await j('get_live_categories'),ls=await j('get_live_streams');
+    const L=Object.fromEntries((Array.isArray(lc)?lc:[]).map(c=>[c.category_id,c.category_name]));
+    D.live=(Array.isArray(ls)?ls:[]).map(o=>({t:'live',name:o.name,img:o.stream_icon,cat:L[o.category_id]||'Divers',url:`${C.base}/live/${enc(C.u)}/${enc(C.p)}/${o.stream_id}.m3u8`}));
+  }catch(e){if(await viaM3U())return;fail('Chaînes : '+e.message);return}
+  if(!D.live.length){if(await viaM3U())return;fail('Le serveur ne renvoie aucune chaîne (compte '+(ui.status||'?')+(ui.exp_date?', expiration '+new Date(Number(ui.exp_date)*1000).toLocaleDateString('fr-FR'):'')+').');return}
+  status('');setTab('live');P=1;focus();
+  loadMore();
+}
+(async()=>{
+  renderTabs();$('#act').append(mk('▶ Plein écran'),mk('♡ Ajouter aux favoris'));
+  C=null;
+  try{C=JSON.parse(localStorage.getItem('tv_cfg')||'null')}catch(e){}
+  if(!C&&!FILE){try{C=await (await fetch('/config.json')).json()}catch(e){}}
+  if(!C||!C.server||!C.user||/exemple\.com/.test(C.server)){showForm();return}
+  CFG0=C;start();
+})();
+</script>
+</body>
+</html>

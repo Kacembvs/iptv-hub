@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Diagnostic lecteurs</title>
+<style>
+:root{color-scheme:dark}*{box-sizing:border-box}
+body{margin:0;padding:12px 12px 120px;background:#0a0e17;color:#f1f2f5;font:15px system-ui,sans-serif}
+h1{font-size:20px;margin:4px 0 8px}h2{font-size:16px;margin:0}
+input{width:100%;margin:4px 0 10px;padding:9px;border-radius:9px;border:1px solid #252d42;background:#121828;color:#f1f2f5;font-size:13px}
+button{padding:9px 12px;border:0;border-radius:9px;background:#2f6fed;color:#fff;font-weight:600;font-size:14px}
+button.s{background:#252d42}
+.card{background:#121828;border:1px solid #252d42;border-radius:14px;padding:12px;margin-top:12px}
+.hd{display:flex;gap:8px;align-items:center;margin-bottom:8px}.hd h2{flex:1}
+.v{border-top:1px solid #252d42;padding:8px 0}.v code{font-size:12px;color:#a9adb7;word-break:break-all}
+.r{font-size:13px;color:#cfd3dc;margin:4px 0}.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+.note{color:#a9adb7;font-size:12px;line-height:1.5}
+#ask{position:fixed;left:8px;right:8px;bottom:8px;background:#f5f5f7;color:#111;border-radius:14px;padding:12px;display:flex;gap:8px;align-items:center;font-weight:600}#ask div{flex:1}
+</style></head><body>
+<h1>Diagnostic lecteurs</h1>
+<p class="note">Un lecteur n'est « supporté » que si une vidéo de test démarre réellement. L'ouverture de l'app est détectée automatiquement ; « reçue » et « lancée » sont à confirmer par toi au retour (une page web ne peut pas les observer).</p>
+<div class="card"><label class="note">MP4 public de test</label><input id="u_mp4"><label class="note">HLS public de test</label><input id="u_hls"><label class="note">URL de retour (x-success / x-error), optionnel</label><input id="back" placeholder="vide = pas de callback" autocapitalize="off"></div>
+<div id="cards"></div>
+<div class="row"><button onclick="copyRep()">Copier le rapport</button><button class="s" onclick="if(confirm('Effacer les résultats ?')){R={};sv();draw()}">Réinitialiser</button></div>
+<div id="ask" hidden></div>
+<script>
+const $=s=>document.querySelector(s),enc=encodeURIComponent;
+const D0={mp4:'https://files.firecore.com/infuse/sample-5s-360p.mp4',hls:'https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8'};
+const lsg=(k,d)=>{try{const v=localStorage.getItem(k);return v==null?d:v}catch(e){return d}},lss=(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}};
+let R={};try{R=JSON.parse(lsg('diag_v1','{}'))||{}}catch(e){}
+const sv=()=>lss('diag_v1',JSON.stringify(R));
+const P={
+ vlc:{n:'VLC',probe:'vlc://',v:[
+  {id:'xcb',l:'vlc-x-callback://x-callback-url/stream?url=',b:u=>'vlc-x-callback://x-callback-url/stream?url='+enc(u)},
+  {id:'sch',l:'vlc://<url complète>',b:u=>'vlc://'+u}]},
+ infuse:{n:'Infuse',probe:'infuse://',v:[
+  {id:'xcb',l:'infuse://x-callback-url/play?url=',b:u=>'infuse://x-callback-url/play?url='+enc(u)},
+  {id:'xcbf',l:'infuse://x-callback-url/play?url=&filename=',b:(u,t)=>'infuse://x-callback-url/play?url='+enc(u)+'&filename='+enc(t==='mp4'?'test.mp4':'test.m3u8')},
+  {id:'sch',l:'infuse://<url complète> (non documenté)',b:u=>'infuse://'+u}]},
+ outplayer:{n:'Outplayer',probe:'outplayer://',v:[
+  {id:'sw',l:'outplayer://<url sans http(s)://>',b:u=>u.replace(/^https?:\/\//,'outplayer://')},
+  {id:'full',l:'outplayer://<url complète>',b:u=>'outplayer://'+u},
+  {id:'xcb',l:'outplayer://x-callback-url/play?url= (non documenté)',b:u=>'outplayer://x-callback-url/play?url='+enc(u)}]}};
+let pend=null;
+const ic=v=>v===true?'✅':v===false?'❌':'—';
+const el=(t,c,x)=>{const n=document.createElement(t);if(c)n.className=c;if(x!=null)n.textContent=x;return n};
+['mp4','hls'].forEach(k=>{const i=$('#u_'+k);i.value=lsg('diag_u_'+k,D0[k]);i.oninput=()=>lss('diag_u_'+k,i.value.trim())});
+$('#back').value=lsg('diag_back','');$('#back').oninput=()=>lss('diag_back',$('#back').value.trim());
+{const m=location.hash.match(/^#(ok|err)-(.+)$/);if(m){const k=decodeURIComponent(m[2]);R[k]=R[k]||{};R[k].cb=m[1]==='ok';sv();history.replaceState(null,'',location.pathname+location.search)}}
+function launch(pk,vid,test){
+  const p=P[pk],key=[pk,vid,test].join('|'),url=test==='probe'?'':$('#u_'+test).value.trim();
+  if(test!=='probe'&&!url)return;
+  const bk=$('#back').value.trim(),cb=bk&&/xcb/.test(vid)&&test!=='probe'?'&x-success='+enc(bk+'#ok-'+enc(key))+'&x-error='+enc(bk+'#err-'+enc(key)):'';
+  const target=test==='probe'?p.probe:p.v.find(x=>x.id===vid).b(url,test)+cb;
+  const r=R[key]={t:Date.now(),opened:null,received:null,started:null,cb:null};pend={key,t:Date.now()};sv();
+  setTimeout(()=>{if(r.opened===null){r.opened=false;sv();draw()}},3500);
+  location.href=target}
+document.addEventListener('visibilitychange',()=>{
+  if(!pend)return;const r=R[pend.key];
+  if(document.hidden){if(r.opened===null&&Date.now()-pend.t<3500){r.opened=true;sv()}}
+  else if(r.opened&&pend.key.split('|')[2]!=='probe'&&r.received===null){ask(pend.key,1)}
+  draw()});
+function ask(key,step){
+  const r=R[key],[pk,,test]=key.split('|'),b=$('#ask');b.hidden=false;b.textContent='';
+  b.append(el('div',null,(step===1?'Vidéo reçue par ':'Vidéo lancée (image + son) dans ')+P[pk].n+' ? ('+test.toUpperCase()+')'));
+  const mk=(t,f)=>{const x=el('button',t==='Non'?'s':null,t);x.onclick=()=>{f();sv();draw()};return x};
+  b.append(mk('Oui',()=>{if(step===1){r.received=true;ask(key,2)}else{r.started=true;b.hidden=true}}),mk('Non',()=>{r.received=step===1?false:r.received;r.started=false;b.hidden=true}))}
+function verdict(pk){
+  const ok=[],ko=[];Object.keys(R).filter(k=>k.startsWith(pk+'|')&&!k.endsWith('|probe')).forEach(k=>{const[,v,t]=k.split('|'),l=P[pk].v.find(x=>x.id===v).l+' ['+t+']';if(R[k].started===true)ok.push(l);else if(R[k].started===false)ko.push(l)});
+  return{ok,ko,txt:ok.length?'✅ SUPPORTÉ':ko.length?'❌ aucune lecture démarrée':'❔ non testé'}}
+function draw(){
+  const c=$('#cards');c.textContent='';
+  Object.keys(P).forEach(pk=>{
+    const p=P[pk],vd=verdict(pk),card=el('div','card'),hd=el('div','hd');hd.append(el('h2',null,p.n),el('div',null,vd.txt));card.append(hd);
+    const pr=R[pk+'|probe|probe']||{},ob=el('button','s','1. Ouvrir l’application');ob.onclick=()=>launch(pk,'probe','probe');
+    const row=el('div','row');row.append(ob,el('div','r','application ouverte : '+ic(pr.opened)));card.append(row);
+    p.v.forEach(v=>{const b=el('div','v');b.append(el('code',null,v.l));
+      ['mp4','hls'].forEach((t,i)=>{const r=R[[pk,v.id,t].join('|')]||{},rw=el('div','row'),bt=el('button',null,(i?'3. HLS':'2. MP4'));bt.onclick=()=>launch(pk,v.id,t);
+        rw.append(bt,el('div','r','ouverte '+ic(r.opened)+' · reçue '+ic(r.received)+' · lancée '+ic(r.started)+(r.cb!=null?' · callback '+(r.cb?'✅ succès':'❌ erreur'):'')));b.append(rw)});
+      card.append(b)});
+    if(vd.ok.length)card.append(el('div','note','Schémas validés : '+vd.ok.join(' ; ')));
+    c.append(card)})}
+function copyRep(){
+  const L=['Diagnostic lecteurs '+new Date().toLocaleString('fr-FR'),navigator.userAgent,''];
+  Object.keys(P).forEach(pk=>{const vd=verdict(pk);L.push(P[pk].n+' : '+vd.txt);const pr=R[pk+'|probe|probe'];if(pr)L.push('  ouverture app : '+ic(pr.opened));
+    P[pk].v.forEach(v=>['mp4','hls'].forEach(t=>{const r=R[[pk,v.id,t].join('|')];if(r)L.push('  '+v.l+' ['+t+'] ouverte '+ic(r.opened)+' reçue '+ic(r.received)+' lancée '+ic(r.started)+(r.cb!=null?' callback '+(r.cb?'ok':'erreur'):''))}))});
+  const tx=L.join('\n'),a=document.createElement('textarea');a.value=tx;a.style.cssText='position:fixed;opacity:0';document.body.append(a);a.select();let ok=false;try{ok=document.execCommand('copy')}catch(e){}a.remove();alert(ok?'Rapport copié.':tx)}
+draw();
+</script></body></html>
